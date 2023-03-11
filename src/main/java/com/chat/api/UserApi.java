@@ -1,5 +1,6 @@
 package com.chat.api;
 
+import com.chat.model.Profile;
 import com.chat.model.RoleName;
 import com.chat.model.User;
 import com.chat.payload.*;
@@ -14,12 +15,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.net.URI;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -34,9 +34,7 @@ public class UserApi {
 
     private final JwtTokenProvider tokenProvider;
 
-    public UserApi(UserService userService,
-                   AuthenticationManager authenticationManager,
-                   JwtTokenProvider tokenProvider) {
+    public UserApi(UserService userService, AuthenticationManager authenticationManager, JwtTokenProvider tokenProvider) {
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.tokenProvider = tokenProvider;
@@ -45,15 +43,12 @@ public class UserApi {
 
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginPayload loginPayload) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginPayload.getUsername(),
-                        loginPayload.getPassword()
-                )
-        );
+        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginPayload.getUsername(), loginPayload.getPassword()));
         SecurityContextHolder.getContext().setAuthentication(authentication);
+        User user = (User) authentication.getPrincipal();
         String jwt = tokenProvider.generateToken(authentication);
-        return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
+        LoginResult result = LoginResult.builder().success(true).message("User Logged in successfully").body(Converter.convertTo(user)).token(jwt).build();
+        return ResponseEntity.ok(result);
     }
 
     @Transactional
@@ -61,52 +56,24 @@ public class UserApi {
     public ResponseEntity<?> createUser(@Valid @RequestBody SignUpPayload payload) {
         log.info("creating user {}", payload.getUsername());
 
-        User user = User
-                .builder()
-                .username(payload.getUsername())
-                .password(payload.getPassword())
-                .build();
+        User user = User.builder().username(payload.getUsername()).password(payload.getPassword()).build();
 
-        userService.registerUser(user, RoleName.USER);
+        Profile profile = Profile.builder().name(payload.getName()).user(user).build();
+        user.setProfile(profile);
+
+        User currentUser = userService.registerUser(user, RoleName.USER);
 
         //generate token and return user with token
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        payload.getUsername(),
-                        payload.getPassword()
-                )
-        );
-        String jwt = tokenProvider.generateToken(authentication);
-        URI location = ServletUriComponentsBuilder
-                .fromCurrentContextPath().path("/users/{username}")
-                .buildAndExpand(user.getUsername()).toUri();
-
-        LoginResult result = LoginResult.builder()
-                .success(true)
-                .message("User registered successfully")
-                .body(convertTo(user))
-                .token(jwt)
-                .build();
-        return ResponseEntity.created(location).body(result);
+        String jwt = tokenProvider.generateToken(payload.getUsername(), RoleName.USER);
+        LoginResult result = LoginResult.builder().success(true).message("User registered successfully").body(Converter.convertTo(currentUser)).token(jwt).build();
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(value = "/users")
-    public ResponseEntity<?> findAll(Pageable pageable) {
+    public ResponseEntity<?> findAll(Pageable pageable, @AuthenticationPrincipal User currentUser) {
         log.info("retrieving all users");
-        Page<User> page = userService.findAll(pageable);
-        List<UserDto> userSummaries = page.getContent().stream()
-                .map(this::convertTo).collect(Collectors.toList());
-        return ResponseEntity.ok(UserResult.builder()
-                .body(userSummaries)
-                .success(true).build());
-    }
-
-    private UserDto convertTo(User user) {
-        return UserDto
-                .builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .role(user.getRoles().stream().map(x -> x.getName().name()).collect(Collectors.joining(",")))
-                .build();
+        Page<User> page = userService.findAllByIdNotIn(List.of(currentUser.getId()), pageable);
+        List<UserDto> userSummaries = page.getContent().stream().map(Converter::convertTo).collect(Collectors.toList());
+        return ResponseEntity.ok(UserResult.builder().body(userSummaries).page(com.chat.payload.Page.toPage(page)).success(true).build());
     }
 }

@@ -19,6 +19,4 @@ public class SignUpPayload {
     @NotBlank(message = "password cannot be blank")
     @Size(min = 6, max = 20, message = "minimum password length is 6")
     private String password;
-
-    private String deviceId;
 }

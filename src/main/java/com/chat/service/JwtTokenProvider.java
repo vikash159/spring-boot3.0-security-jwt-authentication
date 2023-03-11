@@ -3,13 +3,14 @@ package com.chat.service;
 import com.chat.config.JwtConfig;
 import com.chat.model.RoleName;
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Arrays;
 import java.util.Date;
@@ -21,7 +22,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class JwtTokenProvider {
 
-    Key key = Keys.secretKeyFor(SignatureAlgorithm.HS512);
+    SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
     private final JwtConfig jwtConfig;
 
     public JwtTokenProvider(JwtConfig jwtConfig) {
@@ -30,34 +31,38 @@ public class JwtTokenProvider {
 
     public String generateToken(Authentication authentication) {
         Long now = System.currentTimeMillis();
-        List<String> uu = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority).collect(Collectors.toList());
+        byte[] apiKeySecretBytes = jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8);
+        Key signingKey = new SecretKeySpec(apiKeySecretBytes, signatureAlgorithm.getJcaName());
         return Jwts.builder()
                 .setSubject(authentication.getName())
                 .claim("authorities", authentication.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority).collect(Collectors.toList()))
                 .setIssuedAt(new Date(now))
                 .setExpiration(new Date(now + jwtConfig.getExpiration() * 1000))  // in milliseconds
-                .signWith(key)
+                .signWith(signingKey, signatureAlgorithm)
                 .compact();
     }
 
-    public String generateToken(String username) {
+    public String generateToken(String username, RoleName roleName) {
         Long now = System.currentTimeMillis();
-        List<String> authorities = Arrays.asList(new SimpleGrantedAuthority("ROLE_" + RoleName.USER.name()))
+        List<String> authorities = Arrays.asList(new SimpleGrantedAuthority("ROLE_" + roleName.name()))
                 .stream().map(SimpleGrantedAuthority::getAuthority).collect(Collectors.toList());
+        byte[] apiKeySecretBytes = jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8);
+        Key signingKey = new SecretKeySpec(apiKeySecretBytes, signatureAlgorithm.getJcaName());
         return Jwts.builder()
                 .setSubject(username)
                 .claim("authorities", authorities)
                 .setIssuedAt(new Date(now))
                 .setExpiration(new Date(now + jwtConfig.getExpiration() * 1000))  // in milliseconds
-                .signWith(key)
+                .signWith(signingKey, signatureAlgorithm)
                 .compact();
     }
 
     public Claims getClaimsFromJWT(String token) {
+        byte[] apiKeySecretBytes = jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8);
+        Key signingKey = new SecretKeySpec(apiKeySecretBytes, signatureAlgorithm.getJcaName());
         return Jwts.parserBuilder()
-                .setSigningKey(key)
+                .setSigningKey(signingKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -79,5 +84,16 @@ public class JwtTokenProvider {
             log.error("JWT claims string is empty.");
         }
         return false;
+    }
+
+    public String getUsernameFromToken(String token) {
+        String username;
+        try {
+            final Claims claims = getClaimsFromJWT(token);
+            username = claims.getSubject();
+        } catch (Exception e) {
+            username = null;
+        }
+        return username;
     }
 }

@@ -29,4 +29,4 @@ security:
     header: Authorization
     prefix: Bearer
     expiration: 1209600
-    secret: chatapp
+    secret: 563d4bfa01d5ef75adg91aw578gh4fgp3fd5p

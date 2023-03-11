@@ -1,22 +1,22 @@
 package com.chat.payload;
 
+import com.chat.model.MessageStatus;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class MessageDto {
-	private String type;
-	private String content;
-
-	public String getType() {
-		return type;
-	}
-
-	public void setType(String type) {
-		this.type = type;
-	}
-
-	public String getContent() {
-		return content;
-	}
-
-	public void setContent(String content) {
-		this.content = content;
-	}
+    private Long id;
+    private String uuid;
+    private String type;
+    private String content;
+    private MessageStatus status;
+    private UserDto user;
+    private ConversationDto conversation;
+    private Instant createdAt;
 }

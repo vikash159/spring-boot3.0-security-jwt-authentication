@@ -2,10 +2,7 @@ package com.chat.service;
 
 import com.chat.exception.ResourceNotFoundException;
 import com.chat.exception.UsernameAlreadyExistsException;
-import com.chat.model.AppUser;
-import com.chat.model.Role;
-import com.chat.model.RoleName;
-import com.chat.model.User;
+import com.chat.model.*;
 import com.chat.repository.RoleRepository;
 import com.chat.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -37,9 +35,9 @@ public class UserService implements UserDetailsService {
         this.roleRepository = roleRepository;
     }
 
-    public Page<User> findAll(Pageable pageable) {
+    public Page<User> findAllByIdNotIn(List<Long> ids, Pageable pageable) {
         log.info("retrieving all users");
-        return userRepository.findAll(pageable);
+        return userRepository.findAllByIdNotIn(ids, pageable);
     }
 
     public Optional<User> findByUsername(String username) {
@@ -67,7 +65,6 @@ public class UserService implements UserDetailsService {
         Set<Role> roles = new HashSet<>();
         roles.add(roleRepository.findByName(roleName));
         user.setRoles(roles);
-
         User savedUser = userRepository.save(user);
         return savedUser;
     }

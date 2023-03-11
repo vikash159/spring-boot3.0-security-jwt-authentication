@@ -6,9 +6,9 @@ import lombok.Data;
 @Data
 public class LoginPayload {
 
-    @NotBlank
+    @NotBlank(message = "username cannot be blank")
     private String username;
 
-    @NotBlank
+    @NotBlank(message = "password cannot  be blank")
     private String password;
 }

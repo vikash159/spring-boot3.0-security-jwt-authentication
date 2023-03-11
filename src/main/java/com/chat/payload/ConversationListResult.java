@@ -7,9 +7,8 @@ import java.util.List;
 
 @Data
 @Builder
-public class UserResult {
+public class ConversationListResult {
     private boolean success;
     private String message;
-    private List<UserDto> body;
-    private Page page;
+    private List<ConversationDto> body;
 }
